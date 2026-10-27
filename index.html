@@ -3,67 +3,90 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Prank Page</title>
+<title>Game</title>
 <style>
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
-    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    font-family: system-ui, sans-serif; background: #0f172a; color: #fff; text-align: center; padding: 20px;
+    margin: 0; min-height: 100vh; font-family: system-ui, sans-serif; background: #0f172a;
+    color: #fff; text-align: center; padding: 20px; display: flex; align-items: center; justify-content: center;
+    user-select: none;
   }
-  .card { max-width: 460px; width: 100%; }
+  .card { max-width: 480px; width: 100%; }
   h1 { font-size: 2rem; margin: 0 0 12px; }
-  p { color: #cbd5e1; margin: 0 0 24px; }
-  button {
+  p { color: #cbd5e1; margin: 0 0 20px; }
+  button.main {
     background: #facc15; color: #111; border: 0; padding: 16px 32px; font-size: 1.1rem;
     font-weight: 700; border-radius: 12px; cursor: pointer;
   }
-  button:active { transform: scale(.97); }
+  #hud { display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 10px; }
+  #arena {
+    position: relative; width: 100%; height: 340px; background: #1e293b;
+    border-radius: 14px; overflow: hidden; touch-action: manipulation;
+  }
+  #target {
+    position: absolute; width: 64px; height: 64px; font-size: 2.6rem; line-height: 64px;
+    cursor: pointer; transition: left .15s, top .15s;
+  }
   #terminal {
-    display: none; text-align: left; background: #000; color: #22c55e; font-family: monospace;
+    text-align: left; background: #000; color: #22c55e; font-family: monospace;
     padding: 20px; border-radius: 10px; min-height: 220px; white-space: pre-wrap; font-size: .9rem;
   }
-  .bar { height: 10px; background: #1e293b; border-radius: 99px; margin-top: 14px; overflow: hidden; display: none; }
+  .bar { height: 10px; background: #1e293b; border-radius: 99px; margin-top: 14px; overflow: hidden; }
   .bar div { height: 100%; width: 0; background: #22c55e; transition: width .3s; }
-  #reveal { display: none; }
-  #reveal h1 { font-size: 3rem; }
   .big { font-size: 5rem; }
+  #reveal h1 { font-size: 3rem; }
+  .hidden { display: none; }
 </style>
 </head>
 <body>
 
-<!-- STEP 1: the bait -->
-<div class="card" id="bait">
-  <h1 id="baitTitle"></h1>
-  <p id="baitText"></p>
-  <button id="baitBtn"></button>
+<!-- Screen 1: intro -->
+<div class="card" id="intro">
+  <h1 id="introTitle"></h1>
+  <p id="introText"></p>
+  <button class="main" id="startBtn"></button>
 </div>
 
-<!-- STEP 2: fake "hacking" screen -->
-<div class="card" id="fake" style="display:none">
+<!-- Screen 2: the game -->
+<div class="card hidden" id="game">
+  <div id="hud"><span id="scoreLabel"></span><span id="goalLabel"></span></div>
+  <div id="arena"><div id="target"></div></div>
+</div>
+
+<!-- Screen 3: fake hacking -->
+<div class="card hidden" id="fake">
   <div id="terminal"></div>
-  <div class="bar" id="bar"><div id="fill"></div></div>
+  <div class="bar"><div id="fill"></div></div>
 </div>
 
-<!-- STEP 3: the reveal -->
-<div class="card" id="reveal">
+<!-- Screen 4: reveal -->
+<div class="card hidden" id="reveal">
   <div class="big" id="revealEmoji"></div>
   <h1 id="revealTitle"></h1>
   <p id="revealText"></p>
+  <button class="main hidden" id="againBtn"></button>
 </div>
 
 <script>
 // ============ EDIT THIS PART ============
 const CONFIG = {
-  tabTitle:    "Congratulations!",
+  tabTitle:    "Catch Game",
 
-  // Step 1 (what your friend sees first)
-  baitTitle:   "🎁 You won a FREE iPhone!",
-  baitText:    "You are today's lucky visitor. Tap below to claim your prize.",
-  baitButton:  "CLAIM NOW",
+  // Intro screen
+  introTitle:  "🎯 Catch the Target!",
+  introText:   "Tap the target 7 times to win a prize. It gets faster!",
+  startButton: "START",
 
-  // Step 2 (fake hacking lines, shown one by one)
+  // Game
+  targetEmoji: "🐭",   // what they have to tap
+  goal:        7,       // taps needed to "win"
+  startSpeedMs: 1400,   // target jumps by itself every X ms (lower = harder)
+  speedUpMs:    120,    // how much faster after each tap
+  minSpeedMs:   450,
+
+  // Fake "hacking" after they win
   fakeLines: [
-    "Connecting to server...",
+    "YOU WIN! Preparing prize...",
     "Accessing phone gallery...",
     "Reading messages...",
     "Uploading 1,284 photos...",
@@ -72,23 +95,34 @@ const CONFIG = {
   ],
   lineDelayMs: 900,
 
-  // Step 3 (the reveal)
-  revealEmoji: "🖕",
-  revealTitle: "ITS A PRANKED!",
-  revealText:  "Sorry Its a prank. 😎 – from Jermaine",
+  // Reveal
+  revealEmoji: "😂",
+  revealTitle: "PRANKED!",
+  revealText:  "Relax, nothing happened. It was just a game. 😎 – from Jermaine",
+  playAgainButton: "Play again (for real this time)",  // set to "" to hide
 
-  // Optional: play a funny beep at the reveal (true / false)
   beep: true
 };
 // ========================================
 
+const $ = id => document.getElementById(id);
 document.title = CONFIG.tabTitle;
-baitTitle.textContent = CONFIG.baitTitle;
-baitText.textContent  = CONFIG.baitText;
-baitBtn.textContent   = CONFIG.baitButton;
-revealEmoji.textContent = CONFIG.revealEmoji;
-revealTitle.textContent = CONFIG.revealTitle;
-revealText.textContent  = CONFIG.revealText;
+$("introTitle").textContent = CONFIG.introTitle;
+$("introText").textContent  = CONFIG.introText;
+$("startBtn").textContent   = CONFIG.startButton;
+$("target").textContent     = CONFIG.targetEmoji;
+$("revealEmoji").textContent = CONFIG.revealEmoji;
+$("revealTitle").textContent = CONFIG.revealTitle;
+$("revealText").textContent  = CONFIG.revealText;
+if (CONFIG.playAgainButton) {
+  $("againBtn").textContent = CONFIG.playAgainButton;
+  $("againBtn").classList.remove("hidden");
+}
+
+function show(id) {
+  ["intro", "game", "fake", "reveal"].forEach(s => $(s).classList.add("hidden"));
+  $(id).classList.remove("hidden");
+}
 
 function playBeep() {
   try {
@@ -102,28 +136,74 @@ function playBeep() {
   } catch (e) {}
 }
 
-baitBtn.addEventListener("click", () => {
-  bait.style.display = "none";
-  fake.style.display = "block";
-  terminal.style.display = "block";
-  bar.style.display = "block";
+let score = 0, speed = CONFIG.startSpeedMs, jumpTimer = null;
 
+function updateHud() {
+  $("scoreLabel").textContent = "Score: " + score;
+  $("goalLabel").textContent  = "Goal: " + CONFIG.goal;
+}
+
+function moveTarget() {
+  const a = $("arena"), t = $("target");
+  const x = Math.random() * (a.clientWidth  - 64);
+  const y = Math.random() * (a.clientHeight - 64);
+  t.style.left = x + "px";
+  t.style.top  = y + "px";
+}
+
+function scheduleJump() {
+  clearInterval(jumpTimer);
+  jumpTimer = setInterval(moveTarget, speed);
+}
+
+function startGame() {
+  score = 0; speed = CONFIG.startSpeedMs;
+  updateHud();
+  show("game");
+  moveTarget();
+  scheduleJump();
+}
+
+function hit(e) {
+  e.preventDefault();
+  score++;
+  updateHud();
+  if (score >= CONFIG.goal) {
+    clearInterval(jumpTimer);
+    runFake();
+    return;
+  }
+  speed = Math.max(CONFIG.minSpeedMs, speed - CONFIG.speedUpMs);
+  moveTarget();
+  scheduleJump();
+}
+
+function runFake() {
+  show("fake");
+  $("terminal").textContent = "";
+  $("fill").style.width = "0";
   let i = 0;
   const total = CONFIG.fakeLines.length;
   const timer = setInterval(() => {
-    terminal.textContent += "> " + CONFIG.fakeLines[i] + "\n";
+    $("terminal").textContent += "> " + CONFIG.fakeLines[i] + "\n";
     i++;
-    fill.style.width = Math.round((i / total) * 100) + "%";
+    $("fill").style.width = Math.round((i / total) * 100) + "%";
     if (i >= total) {
       clearInterval(timer);
       setTimeout(() => {
-        fake.style.display = "none";
-        reveal.style.display = "block";
+        show("reveal");
         document.body.style.background = "#7c3aed";
         if (CONFIG.beep) playBeep();
       }, 800);
     }
   }, CONFIG.lineDelayMs);
+}
+
+$("startBtn").addEventListener("click", startGame);
+$("target").addEventListener("pointerdown", hit);
+$("againBtn").addEventListener("click", () => {
+  document.body.style.background = "#0f172a";
+  startGame();
 });
 </script>
 </body>
